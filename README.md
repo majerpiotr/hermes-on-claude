@@ -309,6 +309,17 @@ Either way the dashboard shows a login form. The credentials are
    `docker compose exec hermes hermes tools post-setup agent_browser` and give
    the container more memory. Everything else in this README works without it.
 
+6. **Tool-call syntax can leak into an answer.** The model occasionally
+   reaches for Claude's native tool-call XML inside the free-text field the
+   decision schema gives it, and the tail of that block (`</content>`,
+   `</invoke>`) arrives as part of the reply. Rare: seen once in a session
+   that mixed month-old history with fresh turns. The shim logs a warning
+   (`reply ends with a closing tag it never opened`) and changes nothing.
+   Trimming the tail would corrupt a reply that ends in XML on purpose, an
+   Atom feed's own `</content>` being the obvious case, and would turn a
+   visible artefact into a quietly truncated answer with nothing left to
+   investigate.
+
 ## Traps worth knowing
 
 These each cost real debugging time; they are documented so they cost you none.

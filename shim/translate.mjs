@@ -250,6 +250,33 @@ export function parseDecision(resultText, hadTools) {
   return { content: decision.content ?? "", toolCalls: [] };
 }
 
+/**
+ * Report a reply that ends with a closing tag it never opened.
+ *
+ * The model occasionally reaches for Claude's native tool-call syntax inside
+ * the free-text `content` the decision schema gives it, and the tail of that
+ * block (`</content></invoke>`) arrives as part of the answer.
+ *
+ * This only reports it. Stripping the tail would corrupt a reply that ends in
+ * XML on purpose, an Atom feed's own `</content>` being the obvious case, and
+ * would turn a visible artefact into a quietly truncated answer with nothing
+ * left to investigate. Requiring the tag to be unopened keeps ordinary
+ * generated markup out of the warning.
+ */
+export function findOrphanClosingTag(text) {
+  if (!text) return null;
+  const trailing = String(text).match(/(?:\s*<\/[A-Za-z][\w:.-]*>)+\s*$/);
+  if (!trailing) return null;
+
+  const body = String(text).slice(0, trailing.index);
+  for (const match of trailing[0].matchAll(/<\/([A-Za-z][\w:.-]*)>/g)) {
+    const name = match[1];
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (!new RegExp(`<${escaped}(\\s|/?>)`, "i").test(body)) return name;
+  }
+  return null;
+}
+
 /** Map the CLI's usage block onto the OpenAI usage shape. */
 export function buildUsage(cliUsage) {
   const usage = cliUsage ?? {};

@@ -154,6 +154,16 @@ app.post("/v1/chat/completions", async (request, reply) => {
   const { content, toolCalls } = translate.parseDecision(result.text, Boolean(tools));
   const usage = translate.buildUsage(result.usage);
 
+  // Reported, never repaired: see findOrphanClosingTag for why trimming the
+  // tail would be worse than leaving it visible.
+  const orphanTag = translate.findOrphanClosingTag(content);
+  if (orphanTag) {
+    log.warn(
+      { tag: orphanTag, model: result.model || model, tools: (tools || []).length },
+      "reply ends with a closing tag it never opened; tool-call syntax may have leaked into the answer",
+    );
+  }
+
   log.info(
     {
       requested: body.model,
