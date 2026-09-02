@@ -252,8 +252,9 @@ What differs:
 
 ### Reaching the dashboard
 
-The dashboard listens on port 9119 at whatever address `BIND_ADDR` names. That
-setting decides which of these two routes you use.
+The container listens on `0.0.0.0`, and Docker publishes that on port 9119 at
+the address `BIND_ADDR` names. That setting decides which of these two routes
+you use.
 
 **Default `BIND_ADDR=127.0.0.1`: forward the port over SSH.** The port is bound
 to the server's own loopback, so nothing outside the machine can reach it.
@@ -264,6 +265,19 @@ ssh -L 9119:localhost:9119 user@your-vps
 ```
 
 Leave that session open and browse to `http://localhost:9119`.
+
+If port 9119 is already taken on your own machine (running this stack locally
+takes it), ssh does not stop. It prints `bind: Address already in use` and
+`Could not request local forwarding`, then connects anyway and exits 0. The
+tunnel is dead while the session looks healthy, and `http://localhost:9119`
+quietly serves whatever else holds the port. Forward to a free local port
+instead:
+
+```bash
+ssh -L 19119:localhost:9119 user@your-vps
+```
+
+Then browse to `http://localhost:19119`.
 
 **`BIND_ADDR` set to a mesh address: browse to it directly.** With, say,
 `BIND_ADDR=100.x.y.z`, the dashboard is at `http://100.x.y.z:9119` from any
