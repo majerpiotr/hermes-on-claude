@@ -1,0 +1,101 @@
+# Hermes Agent backed by a Claude subscription.
+#
+# Two services on purpose:
+#   claude-shim  holds the Claude Code CLI and the subscription token
+#   hermes       the agent runtime, official image, no token of its own
+#
+# This file lives OUTSIDE the bind-mounted volume so the agent cannot edit its
+# own deployment.
+
+services:
+  claude-shim:
+    build: ./shim
+    image: claude-code-shim:local
+    container_name: claude-shim
+    restart: unless-stopped
+    environment:
+      # The only credential in the stack. Generate with `claude setup-token`.
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:?set CLAUDE_CODE_OAUTH_TOKEN in .env}
+      CLAUDE_SHIM_MAX_BUDGET_USD: ${CLAUDE_SHIM_MAX_BUDGET_USD:-2.00}
+      CLAUDE_SHIM_TIMEOUT: ${CLAUDE_SHIM_TIMEOUT:-300}
+      CLAUDE_SHIM_LOG_LEVEL: ${CLAUDE_SHIM_LOG_LEVEL:-INFO}
+    volumes:
+      # Claude Code's own state. Kept off the Hermes volume so the agent cannot
+      # read the credential store it writes.
+      - claude-shim-home:/home/shim
+    ports:
+      # Own variable, not BIND_ADDR: the shim has no authentication of its
+      # own, so it must stay on loopback even when BIND_ADDR points at a
+      # private mesh interface for the dashboard. Hermes reaches this
+      # service over hermes-net, not through this published port; the port
+      # exists only so you can curl it while debugging.
+      - "${SHIM_BIND_ADDR:-127.0.0.1}:8080:8080"
+    networks:
+      - hermes-net
+    deploy:
+      resources:
+        limits:
+          memory: ${SHIM_MEM_LIMIT:-1G}
+          cpus: "${SHIM_CPU_LIMIT:-0.5}"
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  hermes:
+    # Derived from the official image, adding only the ddgs search backend.
+    # See hermes/Dockerfile for why that is baked in rather than installed at
+    # runtime.
+    build: ./hermes
+    image: hermes-agent-ddgs:local
+    container_name: hermes
+    restart: unless-stopped
+    command: gateway run
+    depends_on:
+      claude-shim:
+        condition: service_healthy
+    environment:
+      HERMES_DASHBOARD: "1"
+      HERMES_DASHBOARD_HOST: "0.0.0.0"
+      HERMES_DASHBOARD_PORT: "9119"
+      # The dashboard is fail-closed: without an auth provider it refuses to
+      # bind 0.0.0.0, and in Docker it must bind 0.0.0.0 for the published
+      # port to reach it. Publishing on 127.0.0.1 does not substitute for this.
+      HERMES_DASHBOARD_BASIC_AUTH_USERNAME: ${HERMES_DASHBOARD_BASIC_AUTH_USERNAME:?set in .env}
+      HERMES_DASHBOARD_BASIC_AUTH_PASSWORD: ${HERMES_DASHBOARD_BASIC_AUTH_PASSWORD:?set in .env}
+      # Signs dashboard session cookies. Unset, Hermes picks a random key per
+      # process, so every restart of this container logs you out. setup.sh
+      # generates one into .env.
+      HERMES_DASHBOARD_BASIC_AUTH_SECRET: ${HERMES_DASHBOARD_BASIC_AUTH_SECRET:-}
+    volumes:
+      # Everything Hermes owns is visible and editable on the host here.
+      # HERMES_DATA_DIR lets an existing installation be adopted in place,
+      # keeping its sessions, memories and platform credentials.
+      - ${HERMES_DATA_DIR:-./hermes-home}:/opt/data
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:8642:8642"   # gateway / OpenAI-compatible API
+      - "${BIND_ADDR:-127.0.0.1}:9119:9119"   # dashboard
+    networks:
+      - hermes-net
+    # Playwright/Chromium needs more than the default 64m of shared memory.
+    # This is a cap on a tmpfs, not a reservation, but it does count against
+    # the container's memory limit when actually used.
+    shm_size: ${HERMES_SHM_SIZE:-1g}
+    deploy:
+      resources:
+        limits:
+          memory: ${HERMES_MEM_LIMIT:-2G}
+          cpus: "${HERMES_CPU_LIMIT:-1.5}"
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+networks:
+  hermes-net:
+    driver: bridge
+
+volumes:
+  claude-shim-home:

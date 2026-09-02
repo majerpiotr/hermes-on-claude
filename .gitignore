@@ -1,0 +1,24 @@
+# Secrets: never commit
+.env
+*.env
+.env.*
+!.env.example
+
+# Hermes runtime state. The whole directory is generated: config, databases,
+# sessions, memories, caches, downloaded binaries (uv, tirith), the gateway
+# socket. Several hundred MB after a day's use. setup.sh recreates what is
+# needed; nothing in here belongs in version control.
+hermes-home/
+
+# Claude Code state inside the shim container (named volume in compose; this
+# covers a bind-mounted variant too)
+shim-home/
+
+# Node dependencies (the Dockerfile reinstalls them; a local install is only
+# for running the shim outside the container while debugging)
+shim/node_modules/
+
+.DS_Store
+
+# Working notes for context handoff, not part of the deliverable
+HANDOFF.md

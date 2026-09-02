@@ -1,0 +1,64 @@
+# Hermes configuration template.
+#
+# setup.sh copies this to hermes-home/config.yaml on first run and never
+# overwrites it afterwards, so your edits survive re-running setup. Everything
+# here can also be changed later with `hermes config set <key> <value>`.
+#
+# The parts that make this project work (and are not Hermes defaults) are the
+# three `provider: custom` + `base_url` pairs: they point Hermes at the
+# claude-shim container instead of at a pay-per-token API.
+
+model:
+  # "custom" is Hermes' generic OpenAI-compatible provider. claude-shim speaks
+  # that protocol and translates it into `claude -p` calls.
+  provider: custom
+  base_url: http://claude-shim:8080/v1
+  default: claude-sonnet-5
+
+# Context compression is mechanical summarising, not reasoning. Running it on
+# the cheapest model is a large saving on long sessions.
+#
+# The key is `auxiliary.compression`, not a top-level `compression`. A
+# top-level block is accepted by the YAML and silently ignored: `hermes config
+# show` then reports "Context Compression Model: (auto)" and every compression
+# turn quietly runs on the main model instead.
+auxiliary:
+  compression:
+    provider: custom
+    base_url: http://claude-shim:8080/v1
+    model: claude-haiku-4-5
+
+# Subagents go through the same shim. Hermes 0.21 supports a per-child model,
+# so this can differ from model.default if you want cheaper workers.
+delegation:
+  provider: custom
+  base_url: http://claude-shim:8080/v1
+  model: claude-sonnet-5
+  max_concurrent_children: 3
+  max_spawn_depth: 2
+  child_timeout_seconds: 300
+
+approvals:
+  # "smart" asks in-channel before risky commands instead of running them
+  # blind. The deny list is absolute: these are never offered for approval.
+  mode: smart
+  deny:
+    # The agent must not dismantle its own isolation or lock you out of the box.
+    - docker*
+    - ufw*
+    - tailscale*
+    - systemctl*
+    # Irreversible history / data loss.
+    - git push --force*
+    - git reset --hard*
+    - shred*
+    - userdel*
+    - rm -rf /*
+
+web:
+  # Hermes defaults to keyless Firecrawl, which returns 403 without an API key
+  # and wastes a tool turn on every search. ddgs (DuckDuckGo) needs no key.
+  # The package is baked into the Hermes image (see hermes/Dockerfile), since
+  # anything installed into a running container is wiped by
+  # `docker compose up --force-recreate`. This line only selects the backend.
+  search_backend: ddgs
