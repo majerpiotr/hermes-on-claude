@@ -210,13 +210,12 @@ it does stop a runaway loop.
 
 ## Deploying to a VPS
 
-The compose file transfers unchanged. This section itself is unverified on a
-real VPS: everything above was tested on macOS with Docker Desktop, plus an
-amd64 build check under emulation. The Linux ownership path below,
-`chown -R 10000:10000 hermes-home`, in particular has not been run for real,
-and is the part most likely to need a second look.
+The compose file transfers unchanged. This has been run on a real Linux VPS
+(2 vCPU, amd64): both adopting an existing data directory in place, and
+checking that a directory created by root and chowned to uid 10000 is then
+writable by the container, which is the ownership step below.
 
-What differs:
+What differs from running it on your own machine:
 
 - **Ownership is real on Linux.** `setup.sh` runs
   `chown -R 10000:10000 hermes-home` (with `sudo` if needed). On macOS it
