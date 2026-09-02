@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/banner.png" alt="Hermes on Claude banner" width="100%">
+</p>
+
 # Hermes Agent on a Claude subscription
 
 Run [Hermes Agent](https://hermes-agent.nousresearch.com) in Docker with your
